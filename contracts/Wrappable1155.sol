@@ -1,17 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "./vendored/ERC1155.sol";
+import "./IWrappable1155.sol";
 import "./Wrapper20.sol";
 
-contract Wrappable1155 is ERC1155 {
+contract Wrappable1155 is ERC1155, IWrappable1155 {
     using Address for address;
+    using SafeMath for uint256;
 
     bytes32 private constant SALT =
         hex"baadc0debaadc0debaadc0debaadc0debaadc0debaadc0debaadc0debaadc0de";
 
-    constructor() ERC1155("https://github.com/nlordell/erc20wrap1155") {}
+    constructor(uint256 id, uint256 amount) ERC1155("https://github.com/nlordell/erc20wrap1155") {
+        _mint(msg.sender, id, amount, hex"");
+    }
 
     function deployWrapper(uint256 id) external returns (address wrapper) {
         bytes memory bytecode;
@@ -43,5 +48,32 @@ contract Wrappable1155 is ERC1155 {
                 abi.encodePacked(hex"ff", this, SALT, keccak256(bytecode))
             );
         wrapper = address(uint256(c2hash));
+    }
+
+    function wrapTransferFrom(
+        address operator,
+        address from,
+        address to,
+        uint256 id,
+        uint256 amount
+    ) external override {
+        requireIsWrapper(id);
+        require(
+            from == operator || isApprovedForAll(from, operator),
+            "ERC20: not approved"
+        );
+
+        _balances[id][from] = _balances[id][from].sub(
+            amount,
+            "ERC20: transfer amount exceeds balance"
+        );
+        _balances[id][to] = _balances[id][to].add(amount);
+
+        emit TransferSingle(operator, from, to, id, amount);
+    }
+
+    function requireIsWrapper(uint256 id) private {
+        (, address wrapper) = encodeWrapperBytecode(id);
+        require(msg.sender == wrapper, "W: wrapper only method");
     }
 }
