@@ -69,6 +69,9 @@ contract Wrappable1155 is ERC1155, IWrappable1155 {
         );
         _balances[id][to] = _balances[id][to].add(amount);
 
+        // TODO(nlordell): Implement "hybrid ERC1155" rules for transferring:
+        // <https://eips.ethereum.org/EIPS/eip-1155#backwards-compatibility>
+
         emit TransferSingle(operator, from, to, id, amount);
     }
 

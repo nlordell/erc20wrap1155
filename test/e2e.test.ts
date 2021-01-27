@@ -43,6 +43,21 @@ describe("Wrappable1155", () => {
       expect(await wrappable.getWrapper(id)).to.equal(wrapper.address);
     });
   });
+
+  describe("wrapTransferFrom", () => {
+    it("should revert when not called from a Wrapper", async () => {
+      await expect(
+        wrappable.wrapTransferFrom(
+          ethers.constants.AddressZero,
+          ethers.constants.AddressZero,
+          ethers.constants.AddressZero,
+          ethers.constants.AddressZero,
+          0,
+          0
+        )
+      ).to.be.reverted;
+    });
+  });
 });
 
 describe("Wrapper20", () => {
