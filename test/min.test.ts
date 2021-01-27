@@ -16,143 +16,151 @@ async function getWrapper(
   return Wrapper20.attach(address);
 }
 
-describe("MinWrappable1155", () => {
-  let wrappable: Contract;
+describe("Minimal ERC20 Implementation", () => {
+  describe("MinWrappable1155", () => {
+    let wrappable: Contract;
 
-  beforeEach(async () => {
-    const Wrappable1155 = await ethers.getContractFactory("MinWrappable1155");
-    wrappable = await Wrappable1155.deploy(0, 0);
-  });
+    beforeEach(async () => {
+      const Wrappable1155 = await ethers.getContractFactory("MinWrappable1155");
+      wrappable = await Wrappable1155.deploy(0, 0);
+    });
 
-  describe("deployWrapper", () => {
-    it("should deploy wrapper contract to a predictable address", async () => {
-      const id = 42;
-      const wrapper = await getWrapper(wrappable, id);
+    describe("deployWrapper", () => {
+      it("should deploy wrapper contract to a predictable address", async () => {
+        const id = 42;
+        const wrapper = await getWrapper(wrappable, id);
 
-      expect(await ethers.provider.getCode(wrapper.address)).to.equal("0x");
-      await wrappable.deployWrapper(id);
-      expect(await ethers.provider.getCode(wrapper.address)).to.not.equal("0x");
+        expect(await ethers.provider.getCode(wrapper.address)).to.equal("0x");
+        await wrappable.deployWrapper(id);
+        expect(await ethers.provider.getCode(wrapper.address)).to.not.equal(
+          "0x"
+        );
+      });
+    });
+
+    describe("getWrapper", () => {
+      it("should compute the CREATE2 address for a wrapper", async () => {
+        const id = 42;
+        const wrapper = await getWrapper(wrappable, id);
+
+        expect(await wrappable.getWrapper(id)).to.equal(wrapper.address);
+      });
+    });
+
+    describe("wrapTransferFrom", () => {
+      it("should revert when not called from a Wrapper", async () => {
+        await expect(
+          wrappable.wrapTransferFrom(
+            ethers.constants.AddressZero,
+            ethers.constants.AddressZero,
+            ethers.constants.AddressZero,
+            ethers.constants.AddressZero,
+            0,
+            0
+          )
+        ).to.be.reverted;
+      });
     });
   });
 
-  describe("getWrapper", () => {
-    it("should compute the CREATE2 address for a wrapper", async () => {
-      const id = 42;
-      const wrapper = await getWrapper(wrappable, id);
+  describe("MinWrapper20", () => {
+    const [unpriviledged, owner, recipient] = waffle.provider.getWallets();
+    const ID = 42;
+    const AMOUNT = ethers.utils.parseEther("1.0");
 
-      expect(await wrappable.getWrapper(id)).to.equal(wrapper.address);
-    });
-  });
+    let wrappable: Contract;
+    let wrapper: Contract;
 
-  describe("wrapTransferFrom", () => {
-    it("should revert when not called from a Wrapper", async () => {
-      await expect(
-        wrappable.wrapTransferFrom(
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero,
-          0,
-          0
-        )
-      ).to.be.reverted;
-    });
-  });
-});
-
-describe("Wrapper20", () => {
-  const [unpriviledged, owner, recipient] = waffle.provider.getWallets();
-  const ID = 42;
-  const AMOUNT = ethers.utils.parseEther("1.0");
-
-  let wrappable: Contract;
-  let wrapper: Contract;
-
-  beforeEach(async () => {
-    const Wrappable1155 = await ethers.getContractFactory("MinWrappable1155");
-    wrappable = await Wrappable1155.connect(owner).deploy(ID, AMOUNT);
-    wrappable = wrappable.connect(unpriviledged);
-    await wrappable.deployWrapper(ID);
-    wrapper = await getWrapper(wrappable, ID);
-  });
-
-  describe("allowance", () => {
-    it("should return 0 for unapproved operators", async () => {
-      expect(
-        await wrapper.allowance(owner.address, recipient.address)
-      ).to.equal(ethers.constants.Zero);
+    beforeEach(async () => {
+      const Wrappable1155 = await ethers.getContractFactory("MinWrappable1155");
+      wrappable = await Wrappable1155.connect(owner).deploy(ID, AMOUNT);
+      wrappable = wrappable.connect(unpriviledged);
+      await wrappable.deployWrapper(ID);
+      wrapper = await getWrapper(wrappable, ID);
     });
 
-    it("should return max uin256 for approved operators", async () => {
-      await wrappable.connect(owner).setApprovalForAll(recipient.address, true);
-      expect(
-        await wrapper.allowance(owner.address, recipient.address)
-      ).to.equal(ethers.constants.MaxUint256);
-    });
-  });
+    describe("allowance", () => {
+      it("should return 0 for unapproved operators", async () => {
+        expect(
+          await wrapper.allowance(owner.address, recipient.address)
+        ).to.equal(ethers.constants.Zero);
+      });
 
-  describe("balanceOf", () => {
-    it("should return balance amount", async () => {
-      expect(await wrapper.balanceOf(owner.address)).to.equal(AMOUNT);
-      expect(await wrapper.balanceOf(recipient.address)).to.equal(
-        ethers.constants.Zero
-      );
-    });
-  });
-
-  describe("transfer", () => {
-    it("should transfer to recipient", async () => {
-      const partialAmount = AMOUNT.div(4);
-
-      await wrapper.connect(owner).transfer(recipient.address, partialAmount);
-      expect(await wrapper.balanceOf(owner.address)).to.equal(
-        AMOUNT.sub(partialAmount)
-      );
-      expect(await wrapper.balanceOf(recipient.address)).to.equal(
-        partialAmount
-      );
-    });
-
-    it("should revert on insufficient balances", async () => {
-      await expect(wrapper.transfer(recipient.address, AMOUNT.add(1))).to.be
-        .reverted;
-    });
-  });
-
-  describe("transferFrom", () => {
-    it("should transfer to recipient when transaction is from sender", async () => {
-      await wrapper
-        .connect(owner)
-        .transferFrom(owner.address, recipient.address, AMOUNT);
-      expect(await wrapper.balanceOf(owner.address)).to.equal(
-        ethers.constants.Zero
-      );
-      expect(await wrapper.balanceOf(recipient.address)).to.equal(AMOUNT);
-    });
-
-    it("should transfer to recipient when transaction from approved operator", async () => {
-      await wrappable.connect(owner).setApprovalForAll(recipient.address, true);
-      await wrapper
-        .connect(recipient)
-        .transferFrom(owner.address, recipient.address, AMOUNT);
-      expect(await wrapper.balanceOf(owner.address)).to.equal(
-        ethers.constants.Zero
-      );
-      expect(await wrapper.balanceOf(recipient.address)).to.equal(AMOUNT);
-    });
-
-    it("should revert when transaction from unapproved operator", async () => {
-      await expect(
-        wrapper.transferFrom(owner.address, recipient.address, AMOUNT)
-      ).to.be.reverted;
-    });
-
-    it("should revert on insufficient balances", async () => {
-      await expect(
-        wrapper
+      it("should return max uin256 for approved operators", async () => {
+        await wrappable
           .connect(owner)
-          .transferFrom(owner.address, recipient.address, AMOUNT.add(1))
-      ).to.be.reverted;
+          .setApprovalForAll(recipient.address, true);
+        expect(
+          await wrapper.allowance(owner.address, recipient.address)
+        ).to.equal(ethers.constants.MaxUint256);
+      });
+    });
+
+    describe("balanceOf", () => {
+      it("should return balance amount", async () => {
+        expect(await wrapper.balanceOf(owner.address)).to.equal(AMOUNT);
+        expect(await wrapper.balanceOf(recipient.address)).to.equal(
+          ethers.constants.Zero
+        );
+      });
+    });
+
+    describe("transfer", () => {
+      it("should transfer to recipient", async () => {
+        const partialAmount = AMOUNT.div(4);
+
+        await wrapper.connect(owner).transfer(recipient.address, partialAmount);
+        expect(await wrapper.balanceOf(owner.address)).to.equal(
+          AMOUNT.sub(partialAmount)
+        );
+        expect(await wrapper.balanceOf(recipient.address)).to.equal(
+          partialAmount
+        );
+      });
+
+      it("should revert on insufficient balances", async () => {
+        await expect(wrapper.transfer(recipient.address, AMOUNT.add(1))).to.be
+          .reverted;
+      });
+    });
+
+    describe("transferFrom", () => {
+      it("should transfer to recipient when transaction is from sender", async () => {
+        await wrapper
+          .connect(owner)
+          .transferFrom(owner.address, recipient.address, AMOUNT);
+        expect(await wrapper.balanceOf(owner.address)).to.equal(
+          ethers.constants.Zero
+        );
+        expect(await wrapper.balanceOf(recipient.address)).to.equal(AMOUNT);
+      });
+
+      it("should transfer to recipient when transaction from approved operator", async () => {
+        await wrappable
+          .connect(owner)
+          .setApprovalForAll(recipient.address, true);
+        await wrapper
+          .connect(recipient)
+          .transferFrom(owner.address, recipient.address, AMOUNT);
+        expect(await wrapper.balanceOf(owner.address)).to.equal(
+          ethers.constants.Zero
+        );
+        expect(await wrapper.balanceOf(recipient.address)).to.equal(AMOUNT);
+      });
+
+      it("should revert when transaction from unapproved operator", async () => {
+        await expect(
+          wrapper.transferFrom(owner.address, recipient.address, AMOUNT)
+        ).to.be.reverted;
+      });
+
+      it("should revert on insufficient balances", async () => {
+        await expect(
+          wrapper
+            .connect(owner)
+            .transferFrom(owner.address, recipient.address, AMOUNT.add(1))
+        ).to.be.reverted;
+      });
     });
   });
 });
