@@ -17,7 +17,7 @@ contract Wrappable1155 is ERC1155, IWrappable1155 {
         hex"baadc0debaadc0debaadc0debaadc0debaadc0debaadc0debaadc0debaadc0de";
     bytes4 private constant ERC1155_TOKEN_RECEIVER_INTERFACE = hex"4e2312e0";
 
-    mapping(uint256 => uint256) _totalSupplies;
+    mapping(uint256 => uint256) public override totalSupply;
 
     constructor(uint256 id, uint256 amount)
         ERC1155("https://github.com/nlordell/erc20wrap1155")
@@ -57,28 +57,13 @@ contract Wrappable1155 is ERC1155, IWrappable1155 {
         wrapper = address(uint256(c2hash));
     }
 
-    function totalSupply(uint256 id) external view override returns (uint256) {
-        return _totalSupplies[id];
-    }
-
-    function sudoUnsetApprovalForAll(
-        address account,
-        address operator,
-        uint256 id
-    ) external override {
-        requireIsWrapper(id);
-        _operatorApprovals[account][operator] = false;
-    }
-
     function sudoTransferFrom(
         address operator,
         address from,
         address to,
         uint256 id,
         uint256 amount
-    ) external override returns (bool) {
-        requireIsWrapper(id);
-
+    ) external override isWrapper(id) {
         _balances[id][from] = _balances[id][from].sub(
             amount,
             "ERC20: transfer amount exceeds balance"
@@ -97,8 +82,6 @@ contract Wrappable1155 is ERC1155, IWrappable1155 {
         }
 
         emit TransferSingle(operator, from, to, id, amount);
-
-        return isApprovedForAll(from, operator);
     }
 
     function _beforeTokenTransfer(
@@ -111,13 +94,19 @@ contract Wrappable1155 is ERC1155, IWrappable1155 {
     ) internal override {
         if (from == address(0)) {
             for (uint256 i = 0; i < ids.length; i++) {
-                _totalSupplies[ids[i]] += amounts[i];
+                totalSupply[ids[i]] += amounts[i];
+            }
+        }
+        if (to == address(0)) {
+            for (uint256 i = 0; i < ids.length; i++) {
+                totalSupply[ids[i]] -= amounts[i];
             }
         }
     }
 
-    function requireIsWrapper(uint256 id) private {
+    modifier isWrapper(uint256 id) {
         (, address wrapper) = encodeWrapperBytecode(id);
         require(msg.sender == wrapper, "ERC1155: wrapper only");
+        _;
     }
 }

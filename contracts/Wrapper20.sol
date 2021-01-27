@@ -24,11 +24,7 @@ contract Wrapper20 is IERC20 {
         override
         returns (uint256)
     {
-        if (wrappable.isApprovedForAll(owner, spender)) {
-            return uint256(-1);
-        } else {
-            return _allowances[owner][spender];
-        }
+        return _allowances[owner][spender];
     }
 
     function approve(address spender, uint256 amount)
@@ -36,10 +32,6 @@ contract Wrapper20 is IERC20 {
         override
         returns (bool)
     {
-        // NOTE: ERC20 allowances are fundamentally different from ERC1155
-        // approvals, so when an allowance is set, ensure that the any approval
-        // is removed.
-        wrappable.sudoUnsetApprovalForAll(msg.sender, spender, id);
         _setAllowance(msg.sender, spender, amount);
         return true;
     }
@@ -71,17 +63,15 @@ contract Wrapper20 is IERC20 {
         address recipient,
         uint256 amount
     ) external override returns (bool) {
-        bool approved = _transfer(sender, recipient, amount);
-        if (!approved) {
-            _setAllowance(
-                sender,
-                recipient,
-                _allowances[sender][recipient].sub(
-                    amount,
-                    "ERC20: insufficient allowance"
-                )
-            );
-        }
+        _transfer(sender, recipient, amount);
+        _setAllowance(
+            sender,
+            recipient,
+            _allowances[sender][recipient].sub(
+                amount,
+                "ERC20: insufficient allowance"
+            )
+        );
         return true;
     }
 
@@ -98,14 +88,8 @@ contract Wrapper20 is IERC20 {
         address sender,
         address recipient,
         uint256 amount
-    ) private returns (bool approved) {
-        approved = wrappable.sudoTransferFrom(
-            msg.sender,
-            sender,
-            recipient,
-            id,
-            amount
-        );
+    ) private {
+        wrappable.sudoTransferFrom(msg.sender, sender, recipient, id, amount);
         emit Transfer(sender, recipient, amount);
     }
 }

@@ -44,18 +44,6 @@ describe("Wrappable1155", () => {
     });
   });
 
-  describe("sudoUnsetApprovalForAll", () => {
-    it("should revert when not called from a Wrapper", async () => {
-      await expect(
-        wrappable.sudoUnsetApprovalForAll(
-          ethers.constants.AddressZero,
-          ethers.constants.AddressZero,
-          0
-        )
-      ).to.be.revertedWith("wrapper only");
-    });
-  });
-
   describe("sudoTransferFrom", () => {
     it("should revert when not called from a Wrapper", async () => {
       await expect(
@@ -94,11 +82,11 @@ describe("Wrapper20", () => {
       ).to.equal(ethers.constants.Zero);
     });
 
-    it("should return max uin256 for approved operators", async () => {
+    it("should return 0 for approved operators", async () => {
       await wrappable.connect(owner).setApprovalForAll(recipient.address, true);
       expect(
         await wrapper.allowance(owner.address, recipient.address)
-      ).to.equal(ethers.constants.MaxUint256);
+      ).to.equal(ethers.constants.Zero);
     });
   });
 
@@ -108,14 +96,6 @@ describe("Wrapper20", () => {
       expect(
         await wrapper.allowance(owner.address, recipient.address)
       ).to.equal(AMOUNT);
-    });
-
-    it("should remove ERC1155 approval", async () => {
-      await wrappable.connect(owner).setApprovalForAll(recipient.address, true);
-      await wrapper.connect(owner).approve(recipient.address, AMOUNT);
-      expect(
-        await wrappable.isApprovedForAll(owner.address, recipient.address)
-      ).to.equal(false);
     });
   });
 
@@ -162,22 +142,6 @@ describe("Wrapper20", () => {
   });
 
   describe("transferFrom", () => {
-    it("should transfer when initiated from approved operator", async () => {
-      await wrappable.connect(owner).setApprovalForAll(recipient.address, true);
-      await wrapper
-        .connect(recipient)
-        .transferFrom(owner.address, recipient.address, AMOUNT);
-
-      expect(await wrapper.balanceOf(owner.address)).to.equal(
-        ethers.constants.Zero
-      );
-      expect(await wrapper.balanceOf(recipient.address)).to.equal(AMOUNT);
-
-      expect(
-        await wrapper.allowance(owner.address, recipient.address)
-      ).to.equal(ethers.constants.MaxUint256);
-    });
-
     it("should transfer when initiated from operator with allowance", async () => {
       const transferAmount = ethers.utils.parseEther("0.42");
 
@@ -198,10 +162,21 @@ describe("Wrapper20", () => {
       ).to.equal(AMOUNT.sub(transferAmount));
     });
 
+    it("should revert for approved operator", async () => {
+      await wrappable.connect(owner).setApprovalForAll(recipient.address, true);
+      await expect(
+        wrapper
+          .connect(recipient)
+          .transferFrom(owner.address, recipient.address, AMOUNT)
+      ).to.be.revertedWith("insufficient allowance");
+    });
+
     it("should revert on insufficent allowance", async () => {
       await wrapper.connect(owner).approve(recipient.address, AMOUNT.sub(1));
       await expect(
-        wrapper.transferFrom(owner.address, recipient.address, AMOUNT)
+        wrapper
+          .connect(recipient)
+          .transferFrom(owner.address, recipient.address, AMOUNT)
       ).to.be.revertedWith("insufficient allowance");
     });
 
