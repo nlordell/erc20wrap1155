@@ -44,18 +44,29 @@ describe("Wrappable1155", () => {
     });
   });
 
-  describe("wrapTransferFrom", () => {
+  describe("sudoUnsetApprovalForAll", () => {
     it("should revert when not called from a Wrapper", async () => {
       await expect(
-        wrappable.wrapTransferFrom(
+        wrappable.sudoUnsetApprovalForAll(
           ethers.constants.AddressZero,
+          ethers.constants.AddressZero,
+          0
+        )
+      ).to.be.revertedWith("wrapper only");
+    });
+  });
+
+  describe("sudoTransferFrom", () => {
+    it("should revert when not called from a Wrapper", async () => {
+      await expect(
+        wrappable.sudoTransferFrom(
           ethers.constants.AddressZero,
           ethers.constants.AddressZero,
           ethers.constants.AddressZero,
           0,
           0
         )
-      ).to.be.reverted;
+      ).to.be.revertedWith("wrapper only");
     });
   });
 });
@@ -91,12 +102,35 @@ describe("Wrapper20", () => {
     });
   });
 
+  describe("approve", () => {
+    it("should set allowance", async () => {
+      await wrapper.connect(owner).approve(recipient.address, AMOUNT);
+      expect(
+        await wrapper.allowance(owner.address, recipient.address)
+      ).to.equal(AMOUNT);
+    });
+
+    it("should remove ERC1155 approval", async () => {
+      await wrappable.connect(owner).setApprovalForAll(recipient.address, true);
+      await wrapper.connect(owner).approve(recipient.address, AMOUNT);
+      expect(
+        await wrappable.isApprovedForAll(owner.address, recipient.address)
+      ).to.equal(false);
+    });
+  });
+
   describe("balanceOf", () => {
     it("should return balance amount", async () => {
       expect(await wrapper.balanceOf(owner.address)).to.equal(AMOUNT);
       expect(await wrapper.balanceOf(recipient.address)).to.equal(
         ethers.constants.Zero
       );
+    });
+  });
+
+  describe("totalSupply", () => {
+    it("should return the total supply", async () => {
+      expect(await wrapper.totalSupply()).to.equal(AMOUNT);
     });
   });
 
@@ -113,6 +147,14 @@ describe("Wrapper20", () => {
       );
     });
 
+    it("should not update allowance", async () => {
+      await wrapper.connect(owner).approve(recipient.address, AMOUNT);
+      await wrapper.connect(owner).transfer(recipient.address, AMOUNT);
+      expect(
+        await wrapper.allowance(owner.address, recipient.address)
+      ).to.equal(AMOUNT);
+    });
+
     it("should revert on insufficient balances", async () => {
       await expect(wrapper.transfer(recipient.address, AMOUNT.add(1))).to.be
         .reverted;
@@ -120,25 +162,56 @@ describe("Wrapper20", () => {
   });
 
   describe("transferFrom", () => {
-    it("should transfer to recipient when transaction is from sender", async () => {
-      await wrapper
-        .connect(owner)
-        .transferFrom(owner.address, recipient.address, AMOUNT);
-      expect(await wrapper.balanceOf(owner.address)).to.equal(
-        ethers.constants.Zero
-      );
-      expect(await wrapper.balanceOf(recipient.address)).to.equal(AMOUNT);
-    });
-
-    it("should transfer to recipient when transaction from approved operator", async () => {
+    it("should transfer when initiated from approved operator", async () => {
       await wrappable.connect(owner).setApprovalForAll(recipient.address, true);
       await wrapper
         .connect(recipient)
         .transferFrom(owner.address, recipient.address, AMOUNT);
+
       expect(await wrapper.balanceOf(owner.address)).to.equal(
         ethers.constants.Zero
       );
       expect(await wrapper.balanceOf(recipient.address)).to.equal(AMOUNT);
+
+      expect(
+        await wrapper.allowance(owner.address, recipient.address)
+      ).to.equal(ethers.constants.MaxUint256);
+    });
+
+    it("should transfer when initiated from operator with allowance", async () => {
+      const transferAmount = ethers.utils.parseEther("0.42");
+
+      await wrapper.connect(owner).approve(recipient.address, AMOUNT);
+      await wrapper
+        .connect(recipient)
+        .transferFrom(owner.address, recipient.address, transferAmount);
+
+      expect(await wrapper.balanceOf(owner.address)).to.equal(
+        AMOUNT.sub(transferAmount)
+      );
+      expect(await wrapper.balanceOf(recipient.address)).to.equal(
+        transferAmount
+      );
+
+      expect(
+        await wrapper.allowance(owner.address, recipient.address)
+      ).to.equal(AMOUNT.sub(transferAmount));
+    });
+
+    it("should revert on insufficent allowance", async () => {
+      await wrapper.connect(owner).approve(recipient.address, AMOUNT.sub(1));
+      await expect(
+        wrapper.transferFrom(owner.address, recipient.address, AMOUNT)
+      ).to.be.revertedWith("insufficient allowance");
+    });
+
+    it("should revert on insufficent allowance even from owner", async () => {
+      // NOTE: The OpenZeppelin ERC20 behaves this way.
+      await expect(
+        wrapper
+          .connect(owner)
+          .transferFrom(owner.address, recipient.address, AMOUNT)
+      ).to.be.revertedWith("insufficient allowance");
     });
 
     it("should revert when transaction from unapproved operator", async () => {

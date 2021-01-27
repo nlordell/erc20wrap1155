@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
+import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./IWrappable1155.sol";
 
 contract Wrapper20 is IERC20 {
+    using SafeMath for uint256;
+
     IWrappable1155 public immutable wrappable;
     uint256 public immutable id;
+
+    mapping(address => mapping(address => uint256)) private _allowances;
 
     constructor(uint256 id_) public {
         wrappable = IWrappable1155(msg.sender);
@@ -17,11 +22,12 @@ contract Wrapper20 is IERC20 {
         external
         view
         override
-        returns (uint256 amount)
+        returns (uint256)
     {
-        bool approved = wrappable.isApprovedForAll(owner, spender);
-        if (approved) {
-            amount = uint256(-1);
+        if (wrappable.isApprovedForAll(owner, spender)) {
+            return uint256(-1);
+        } else {
+            return _allowances[owner][spender];
         }
     }
 
@@ -30,14 +36,12 @@ contract Wrapper20 is IERC20 {
         override
         returns (bool)
     {
-        // TODO(nlordell): This can be implemented by keeping `allowances`
-        // separate from `approvals`. With this separate state, `transferFrom`
-        // can be relatively trivially implemented such that:
-        // - if the `operator` is the sender or is ERC1155 approved, the amount
-        // is transferred like an ERC20 `transfer`
-        // - otherwise the amount is tranferred like an ERC20 `transferFrom`,
-        // that is, the amount is deducted from the allowance.
-        revert("W: not implemented");
+        // NOTE: ERC20 allowances are fundamentally different from ERC1155
+        // approvals, so when an allowance is set, ensure that the any approval
+        // is removed.
+        wrappable.sudoUnsetApprovalForAll(msg.sender, spender, id);
+        _setAllowance(msg.sender, spender, amount);
+        return true;
     }
 
     function balanceOf(address account)
@@ -50,9 +54,7 @@ contract Wrapper20 is IERC20 {
     }
 
     function totalSupply() external view override returns (uint256) {
-        // TODO(nlordell): This can be relatively trivially be implemented by
-        // keeping track of the total supply in the ERC1155 contract.
-        revert("W: not implemented");
+        return wrappable.totalSupply(id);
     }
 
     function transfer(address recipient, uint256 amount)
@@ -60,16 +62,50 @@ contract Wrapper20 is IERC20 {
         override
         returns (bool)
     {
-        return transferFrom(msg.sender, recipient, amount);
+        _transfer(msg.sender, recipient, amount);
+        return true;
     }
 
     function transferFrom(
         address sender,
         address recipient,
         uint256 amount
-    ) public override returns (bool) {
-        wrappable.wrapTransferFrom(msg.sender, sender, recipient, id, amount);
-        emit Transfer(sender, recipient, amount);
+    ) external override returns (bool) {
+        bool approved = _transfer(sender, recipient, amount);
+        if (!approved) {
+            _setAllowance(
+                sender,
+                recipient,
+                _allowances[sender][recipient].sub(
+                    amount,
+                    "ERC20: insufficient allowance"
+                )
+            );
+        }
         return true;
+    }
+
+    function _setAllowance(
+        address owner,
+        address spender,
+        uint256 amount
+    ) private {
+        _allowances[owner][spender] = amount;
+        emit Approval(owner, spender, amount);
+    }
+
+    function _transfer(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) private returns (bool approved) {
+        approved = wrappable.sudoTransferFrom(
+            msg.sender,
+            sender,
+            recipient,
+            id,
+            amount
+        );
+        emit Transfer(sender, recipient, amount);
     }
 }
