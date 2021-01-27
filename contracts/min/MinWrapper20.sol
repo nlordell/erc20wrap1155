@@ -2,14 +2,14 @@
 pragma solidity ^0.7.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./IWrappable1155.sol";
+import "./IMinWrappable1155.sol";
 
-contract Wrapper20 is IERC20 {
-    IWrappable1155 public immutable wrappable;
+contract MinWrapper20 is IERC20 {
+    IMinWrappable1155 public immutable wrappable;
     uint256 public immutable id;
 
     constructor(uint256 id_) public {
-        wrappable = IWrappable1155(msg.sender);
+        wrappable = IMinWrappable1155(msg.sender);
         id = id_;
     }
 

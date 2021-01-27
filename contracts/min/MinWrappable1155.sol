@@ -3,11 +3,11 @@ pragma solidity ^0.7.0;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./vendored/ERC1155.sol";
-import "./IWrappable1155.sol";
-import "./Wrapper20.sol";
+import "../vendored/ERC1155.sol";
+import "./IMinWrappable1155.sol";
+import "./MinWrapper20.sol";
 
-contract Wrappable1155 is ERC1155, IWrappable1155 {
+contract MinWrappable1155 is ERC1155, IMinWrappable1155 {
     using Address for address;
     using SafeMath for uint256;
 
@@ -42,7 +42,7 @@ contract Wrappable1155 is ERC1155, IWrappable1155 {
         returns (bytes memory bytecode, address wrapper)
     {
         bytecode = abi.encodePacked(
-            type(Wrapper20).creationCode,
+            type(MinWrapper20).creationCode,
             abi.encode(id)
         );
         bytes32 c2hash =

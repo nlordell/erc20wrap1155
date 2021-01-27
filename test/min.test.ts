@@ -6,7 +6,7 @@ async function getWrapper(
   wrappable: Contract,
   id: BigNumberish
 ): Promise<Contract> {
-  const Wrapper20 = await ethers.getContractFactory("Wrapper20");
+  const Wrapper20 = await ethers.getContractFactory("MinWrapper20");
   const bytecode = Wrapper20.getDeployTransaction([id]).data || "0x";
   const address = ethers.utils.getCreate2Address(
     wrappable.address,
@@ -16,11 +16,11 @@ async function getWrapper(
   return Wrapper20.attach(address);
 }
 
-describe("Wrappable1155", () => {
+describe("MinWrappable1155", () => {
   let wrappable: Contract;
 
   beforeEach(async () => {
-    const Wrappable1155 = await ethers.getContractFactory("Wrappable1155");
+    const Wrappable1155 = await ethers.getContractFactory("MinWrappable1155");
     wrappable = await Wrappable1155.deploy(0, 0);
   });
 
@@ -69,7 +69,7 @@ describe("Wrapper20", () => {
   let wrapper: Contract;
 
   beforeEach(async () => {
-    const Wrappable1155 = await ethers.getContractFactory("Wrappable1155");
+    const Wrappable1155 = await ethers.getContractFactory("MinWrappable1155");
     wrappable = await Wrappable1155.connect(owner).deploy(ID, AMOUNT);
     wrappable = wrappable.connect(unpriviledged);
     await wrappable.deployWrapper(ID);
