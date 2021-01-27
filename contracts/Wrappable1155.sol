@@ -14,7 +14,9 @@ contract Wrappable1155 is ERC1155, IWrappable1155 {
     bytes32 private constant SALT =
         hex"baadc0debaadc0debaadc0debaadc0debaadc0debaadc0debaadc0debaadc0de";
 
-    constructor(uint256 id, uint256 amount) ERC1155("https://github.com/nlordell/erc20wrap1155") {
+    constructor(uint256 id, uint256 amount)
+        ERC1155("https://github.com/nlordell/erc20wrap1155")
+    {
         _mint(msg.sender, id, amount, hex"");
     }
 
